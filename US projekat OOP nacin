@@ -1,0 +1,147 @@
+#include "mbed.h"
+#include "stm32f413h_discovery_ts.h"
+#include "stm32f413h_discovery_lcd.h"
+#include <vector>
+
+TS_StateTypeDef TS_State = { 0 };
+
+short score;
+
+class Shape {
+public:
+    virtual bool isDead() = 0;
+    virtual void move(short displacement) = 0;
+    virtual void killIfHit(short a, short b, short points) = 0;
+};
+
+class RedSquare : public Shape {
+    short x, y, length, speed;
+    bool leftRight = true, dead = false;
+    void drawShape(uint16_t color) {
+        BSP_LCD_SetTextColor(color);
+        BSP_LCD_FillRect(x, y, length, length);
+    }
+public:
+    RedSquare(short a, short b, short l) {
+        x = a;
+        y = b;
+        length = l;
+        drawShape(LCD_COLOR_RED);
+    }
+    bool isDead() { return dead; }
+    void move(short displacement) {
+        drawShape(LCD_COLOR_WHITE);
+        x += leftRight*displacement - (!leftRight)*displacement;
+        drawShape(LCD_COLOR_RED);
+        if (x >= 250)
+            dead = true;
+    }
+    void killIfHit(short a, short b, short points) {
+        if (a >= x && a <= x+length && b >= y && b <= y+length) {
+            drawShape(LCD_COLOR_WHITE);
+            dead = true;
+            score += points;
+        }
+    }
+};
+
+class BlueSquare : public Shape {
+    short x, y, length, yRange, speed;
+    bool leftRight = true, downUp = true, dead = false;
+    void drawShape(uint16_t color) {
+        BSP_LCD_SetTextColor(color);
+        BSP_LCD_FillRect(x, y, length, length);
+    }
+public:
+    BlueSquare(short a, short b, short l) {
+        x = a;
+        y = b;
+        yRange = b;
+        length = l;
+        drawShape(LCD_COLOR_BLUE);
+    }
+    bool isDead() { return dead; }
+    void move(short displacement) {
+        drawShape(LCD_COLOR_WHITE);
+        x += leftRight*displacement - (!leftRight)*displacement;
+        if (y >= yRange+15)
+            downUp = true;
+        else if (y <= yRange-15)
+            downUp = false;
+        y += (!downUp)*displacement - downUp*displacement;
+        drawShape(LCD_COLOR_BLUE);
+        if (x >= 250)
+            dead = true;
+    }
+    void killIfHit(short a, short b, short points) {
+        if (a >= x && a <= x+length && b >= y && b <= y+length) {
+            drawShape(LCD_COLOR_WHITE);
+            dead = true;
+            score += points;
+        }
+    }
+};
+
+
+int main() {
+    printf("Draw on the screen!\n");
+    
+    BSP_LCD_Init();
+    /* Touchscreen initialization */
+    if (BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize()) == TS_ERROR) {
+        printf("BSP_TS_Init error\n");
+    }
+
+    /* Clear the LCD */
+    char ispis[10];
+    BSP_LCD_Clear(LCD_COLOR_WHITE);
+    BSP_LCD_DisplayStringAt(0, 215, (uint8_t *)"0", CENTER_MODE);
+    std::vector<Shape*> shapes;
+    shapes.push_back(new RedSquare(0,100,20));
+    shapes.push_back(new BlueSquare(0,50,20));
+    shapes.push_back(new RedSquare(0,0,20));
+    
+    int speed = 2;
+    uint16_t x1=-1, y1=-1;
+    
+    while (1) {
+        for (int i = 0; i < shapes.size(); i++) {
+            shapes[i]->killIfHit(x1,y1,1);
+            if (shapes[i]->isDead())
+                shapes.erase(shapes.begin() + i--);
+        }
+        
+        sprintf(ispis, "%d", score);
+        BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+        BSP_LCD_DisplayStringAt(0, 215, (uint8_t *)ispis, CENTER_MODE);
+        
+        BSP_TS_GetState(&TS_State);
+        if(TS_State.touchDetected) {
+            /* One or dual touch have been detected          */
+
+            /* Get X and Y position of the first touch post calibrated */
+            x1 = TS_State.touchX[0];
+            y1 = TS_State.touchY[0];
+            /*for (int i = 0; i < squares.size(); i++) {
+                if (squares[i].containsPoint(x1,y1)) {
+                    sprintf(ispis, "%d", ++score);
+                    BSP_LCD_DisplayStringAt(0, 215, (uint8_t *)ispis, CENTER_MODE);
+                    BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+                    BSP_LCD_FillRect(squares[i].x, squares[i].y, squares[i].length, squares[i].length);
+                    squares.erase(squares.begin() + i);
+                }
+            }*/
+        }
+        for (int i = 0; i < shapes.size(); i++)
+            shapes[i]->move(1);
+        if (shapes.size() == 0) {
+            BSP_LCD_Clear(LCD_COLOR_WHITE);
+            BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+            BSP_LCD_SetFont(&Font12);
+            sprintf(ispis, "Igra je gotova, vas rezulat je %d", score);
+            BSP_LCD_DisplayStringAt(0, 100, (uint8_t *)ispis, CENTER_MODE);
+            break;
+        }
+    }
+}
+
