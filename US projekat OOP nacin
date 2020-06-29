@@ -3,6 +3,8 @@
 #include "stm32f413h_discovery_lcd.h"
 #include <vector>
 
+DigitalIn btnLeft(p5), btnRight(p6), btnUp(p7), btnDown(p8), btnOK(p9);
+
 TS_StateTypeDef TS_State = { 0 };
 
 short score;
@@ -82,6 +84,47 @@ public:
     }
 };
 
+class Crosshair {
+    short xH, yH, xV, yV, length;
+public:
+    Crosshair(short a, short b, short c, short d, short e) {
+        xH = a; yH = b;
+        xV = c; yV = d;
+        length = e;
+        BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+        BSP_LCD_DrawHLine(xH,yH,length);
+        BSP_LCD_DrawVLine(xV,yV,length);
+    }
+    void move() {
+        BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+        BSP_LCD_DrawHLine(xH,yH,length);
+        BSP_LCD_DrawVLine(xV,yV,length);
+        if (btnRight && xH + 9 < 255) {
+            xH += 1;
+            xV += 1;
+        }
+        if (btnLeft && xH > 0) {
+            xH -= 1;
+            xV -= 1;
+        }
+        if (btnUp && yV > 0) {
+            yH -= 1;
+            yV -= 1;
+        }
+        if (btnDown && yV + 9 < 255) {
+            yH += 1;
+            yV += 1;
+        }
+        BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+        BSP_LCD_DrawHLine(xH,yH,length);
+        BSP_LCD_DrawVLine(xV,yV,length);
+    }
+    void crossSection(short &x, short &y) {
+        x = xV;
+        y = yH;
+    }
+};
+
 
 int main() {
     printf("Draw on the screen!\n");
@@ -102,7 +145,9 @@ int main() {
     shapes.push_back(new RedSquare(0,0,20));
     
     int speed = 2;
-    uint16_t x1=-1, y1=-1;
+    short x1 = -1, y1 = -1;
+    
+    Crosshair ch(120,124,124,120,9);
     
     while (1) {
         for (int i = 0; i < shapes.size(); i++) {
@@ -115,22 +160,15 @@ int main() {
         BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
         BSP_LCD_DisplayStringAt(0, 215, (uint8_t *)ispis, CENTER_MODE);
         
+        ch.move();
+        if (btnOK) {
+            ch.crossSection(x1,y1);
+        }
+        
         BSP_TS_GetState(&TS_State);
         if(TS_State.touchDetected) {
-            /* One or dual touch have been detected          */
-
-            /* Get X and Y position of the first touch post calibrated */
             x1 = TS_State.touchX[0];
             y1 = TS_State.touchY[0];
-            /*for (int i = 0; i < squares.size(); i++) {
-                if (squares[i].containsPoint(x1,y1)) {
-                    sprintf(ispis, "%d", ++score);
-                    BSP_LCD_DisplayStringAt(0, 215, (uint8_t *)ispis, CENTER_MODE);
-                    BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
-                    BSP_LCD_FillRect(squares[i].x, squares[i].y, squares[i].length, squares[i].length);
-                    squares.erase(squares.begin() + i);
-                }
-            }*/
         }
         for (int i = 0; i < shapes.size(); i++)
             shapes[i]->move(1);
@@ -144,4 +182,3 @@ int main() {
         }
     }
 }
-
